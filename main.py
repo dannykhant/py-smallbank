@@ -94,14 +94,14 @@ def _format_table(results: dict, duration: float):
         usec = t * 1_000_000
         rate = c / t if t > 0 else 0.0
         lines.append(
-            f"  {name:16s} {c:>12d} {usec:>20.6f} {rate:>20.2f} txn/s"
+            f"  {name:16s} {c:>12d} {usec:>20.0f} {rate:>20.0f} txn/s"
         )
 
     lines.append("--------------------------------------------------------------------------------")
     total_usec_total = total_usec * 1_000_000
     total_rate = total_count / total_usec if total_usec > 0 else 0.0
     lines.append(
-        f"  {'TOTAL':16s} {total_count:>12d} {total_usec_total:>20.6f} {total_rate:>20.2f} txn/s"
+        f"  {'TOTAL':16s} {total_count:>12d} {total_usec_total:>20.0f} {total_rate:>20.0f} txn/s"
     )
     return "\n".join(lines)
 
@@ -130,7 +130,7 @@ def cmd_load(args):
     start = time.time()
     loader.load()
     elapsed = time.time() - start
-    _log(f"Data loading complete ({elapsed:.2f}s)", "loadFinish")
+    _log(f"Data loading complete ({elapsed:.0f}s)", "loadFinish")
 
 
 def cmd_run(args):
@@ -188,7 +188,7 @@ def cmd_test(args):
     load_start = time.time()
     loader.load()
     load_elapsed = time.time() - load_start
-    _log(f"Data loading complete ({load_elapsed:.2f}s)", "loadFinish")
+    _log(f"Data loading complete ({load_elapsed:.0f}s)", "loadFinish")
 
     client = SmallBankClient(
         conn_factory=conn_factory,
