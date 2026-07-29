@@ -4,12 +4,6 @@ Python port of the [SmallBank benchmark](https://github.com/apavlo/h-store/tree/
 
 A simple OLTP benchmark simulating a bank with accounts, savings, and checking tables, with MySQL as the backend. Loading implementation adapted from [OLTPBench](https://github.com/oltpbenchmark/oltpbench).
 
-## Requirements
-
-- Python 3.13+
-- MySQL 8.0+
-- [uv](https://docs.astral.sh/uv/) (recommended)
-
 ## Setup
 
 ```bash
@@ -18,7 +12,7 @@ uv sync
 
 Create the target database in MySQL:
 ```sql
-CREATE DATABASE IF NOT EXISTS `tpcc-baseline`;
+CREATE DATABASE IF NOT EXISTS `smallbank`;
 ```
 
 Edit `mysql.config` to match your MySQL instance:
@@ -27,8 +21,8 @@ Edit `mysql.config` to match your MySQL instance:
 host = 127.0.0.1
 port = 3306
 user = root
-password = mysql_root_password
-database = tpcc-baseline
+password = your_password
+database = smallbank
 ```
 
 ## CLI Usage
