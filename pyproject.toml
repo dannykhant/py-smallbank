@@ -1,0 +1,9 @@
+[project]
+name = "py-smallbank"
+version = "0.1.0"
+description = "SmallBank OLTP Benchmark (Python port)"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pymysql>=1.2.0",
+]
