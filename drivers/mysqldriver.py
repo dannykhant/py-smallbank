@@ -189,30 +189,18 @@ def write_check(conn, acct_id: int, amount: float):
         f"SELECT bal FROM {TABLENAME_SAVINGS} WHERE custid = %s",
         (acct_id,),
     )
-    row = cursor.fetchone()
-    if not row:
+    if not cursor.fetchone():
         raise InvalidAccount(f"No {TABLENAME_SAVINGS} for customer #{acct_id}")
-    savings_bal = row[0]
 
     cursor.execute(
         f"SELECT bal FROM {TABLENAME_CHECKING} WHERE custid = %s",
         (acct_id,),
     )
-    row = cursor.fetchone()
-    if not row:
+    if not cursor.fetchone():
         raise InvalidAccount(f"No {TABLENAME_CHECKING} for customer #{acct_id}")
-    checking_bal = row[0]
 
-    total = savings_bal + checking_bal
-
-    if total < amount:
-        cursor.execute(
-            f"UPDATE {TABLENAME_CHECKING} SET bal = bal - %s WHERE custid = %s",
-            (amount - 1, acct_id),
-        )
-    else:
-        cursor.execute(
-            f"UPDATE {TABLENAME_CHECKING} SET bal = bal - %s WHERE custid = %s",
-            (amount, acct_id),
-        )
+    cursor.execute(
+        f"UPDATE {TABLENAME_CHECKING} SET bal = bal - %s WHERE custid = %s",
+        (amount, acct_id),
+    )
     conn.commit()

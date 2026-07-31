@@ -236,7 +236,7 @@ def test_write_check_insufficient():
 
     cur = conn.cursor()
     cur.execute("SELECT bal FROM CHECKING WHERE custid = 41")
-    assert cur.fetchone()[0] == 50.0 - (200.0 - 1)
+    assert cur.fetchone()[0] == 50.0 - 200.0
 
     conn.close()
     print("  PASS")
