@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from typing import Optional, Callable
 
+import drivers.mysqldriver as _default_driver
 from constants import (
     FREQUENCY_AMALGAMATE,
     FREQUENCY_BALANCE,
@@ -14,14 +15,6 @@ from constants import (
     HOTSPOT_PERCENTAGE,
     HOTSPOT_USE_FIXED_SIZE,
     HOTSPOT_FIXED_SIZE,
-)
-from drivers.mysqldriver import (
-    amalgamate,
-    balance,
-    deposit_checking,
-    send_payment,
-    transact_savings,
-    write_check,
 )
 
 
@@ -39,8 +32,13 @@ class SmallBankClient:
         force_multisite_dtxns: bool = False,
         force_singlesite_dtxns: bool = False,
         custom_weights: Optional[dict[str, int]] = None,
+        driver=None,
     ):
         self.conn_factory = conn_factory
+        if driver is None:
+            driver = _default_driver
+        self.driver = driver
+        Transaction.register_driver(driver)
         self.num_accounts = int(round(num_accounts * scale_factor))
         self.rand = random.Random()
 
@@ -166,20 +164,26 @@ class Transaction(metaclass=_TransactionRegistry):
         self.func = func
         Transaction._instances.append(self)
 
-
-Transaction.AMALGAMATE = Transaction(
-    "AMALGAMATE", FREQUENCY_AMALGAMATE, amalgamate
-)
-Transaction.BALANCE = Transaction("BALANCE", FREQUENCY_BALANCE, balance)
-Transaction.DEPOSIT_CHECKING = Transaction(
-    "DEPOSIT_CHECKING", FREQUENCY_DEPOSIT_CHECKING, deposit_checking
-)
-Transaction.SEND_PAYMENT = Transaction(
-    "SEND_PAYMENT", FREQUENCY_SEND_PAYMENT, send_payment
-)
-Transaction.TRANSACT_SAVINGS = Transaction(
-    "TRANSACT_SAVINGS", FREQUENCY_TRANSACT_SAVINGS, transact_savings
-)
-Transaction.WRITE_CHECK = Transaction(
-    "WRITE_CHECK", FREQUENCY_WRITE_CHECK, write_check
-)
+    @classmethod
+    def register_driver(cls, driver):
+        cls._instances.clear()
+        cls.AMALGAMATE = Transaction(
+            "AMALGAMATE", FREQUENCY_AMALGAMATE, driver.amalgamate
+        )
+        cls.BALANCE = Transaction("BALANCE", FREQUENCY_BALANCE, driver.balance)
+        cls.DEPOSIT_CHECKING = Transaction(
+            "DEPOSIT_CHECKING",
+            FREQUENCY_DEPOSIT_CHECKING,
+            driver.deposit_checking,
+        )
+        cls.SEND_PAYMENT = Transaction(
+            "SEND_PAYMENT", FREQUENCY_SEND_PAYMENT, driver.send_payment
+        )
+        cls.TRANSACT_SAVINGS = Transaction(
+            "TRANSACT_SAVINGS",
+            FREQUENCY_TRANSACT_SAVINGS,
+            driver.transact_savings,
+        )
+        cls.WRITE_CHECK = Transaction(
+            "WRITE_CHECK", FREQUENCY_WRITE_CHECK, driver.write_check
+        )

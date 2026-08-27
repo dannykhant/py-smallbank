@@ -4,35 +4,31 @@ import configparser
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pymysql
+import psycopg2
 
-from drivers.mysqldriver import (
+from drivers.postgresdriver import (
     amalgamate, balance, deposit_checking, send_payment,
     transact_savings, write_check, InvalidAccount, InsufficientFunds,
 )
 
 _cfg = configparser.ConfigParser()
 _cfg.read(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db.config"))
-_mysql = _cfg["mysql"]
+_pg = _cfg["postgres"]
 DB_CONFIG = dict(
-    host=_mysql.get("host", "127.0.0.1"),
-    port=_mysql.getint("port", 3306),
-    user=_mysql.get("user", "root"),
-    password=_mysql.get("password", ""),
-    database=_mysql.get("database", "smallbank"),
-    autocommit=False,
+    host=_pg.get("host", "127.0.0.1"),
+    port=_pg.getint("port", 5432),
+    user=_pg.get("user", "postgres"),
+    password=_pg.get("password", ""),
+    dbname=_pg.get("database", "smallbank"),
 )
 
 
 def make_conn():
-    conn = pymysql.connect(**DB_CONFIG)
-    conn.rollback()
+    conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
-    cur.execute("SET FOREIGN_KEY_CHECKS = 0")
     cur.execute("DROP TABLE IF EXISTS CHECKING")
     cur.execute("DROP TABLE IF EXISTS SAVINGS")
     cur.execute("DROP TABLE IF EXISTS ACCOUNTS")
-    cur.execute("SET FOREIGN_KEY_CHECKS = 1")
     cur.execute("""
         CREATE TABLE ACCOUNTS (
             custid      BIGINT      NOT NULL,
@@ -243,7 +239,7 @@ def test_write_check_insufficient():
 
 
 def _setup_tables():
-    conn = pymysql.connect(**DB_CONFIG)
+    conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
     cur.execute("DROP TABLE IF EXISTS CHECKING")
     cur.execute("DROP TABLE IF EXISTS SAVINGS")
@@ -265,7 +261,7 @@ def _setup_tables():
 
 
 def _conn_factory():
-    return pymysql.connect(**DB_CONFIG)
+    return psycopg2.connect(**DB_CONFIG)
 
 
 def test_loader():
@@ -300,8 +296,10 @@ def test_client_basic():
     )
     loader.load()
 
+    import drivers.postgresdriver as pg_driver
     client = SmallBankClient(
-        conn_factory=_conn_factory, num_accounts=500, scale_factor=1.0
+        conn_factory=_conn_factory, num_accounts=500, scale_factor=1.0,
+        driver=pg_driver,
     )
     results = client.run(200)
     counts = results["counts"]

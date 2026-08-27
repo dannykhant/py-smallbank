@@ -3,26 +3,34 @@ from __future__ import annotations
 import argparse
 import configparser
 import datetime
+import importlib
 import os
 import sys
 import time
 
-import pymysql
-
 from loader import SmallBankLoader
 from client import SmallBankClient
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mysql.config")
+DRIVERS = {
+    "mysql": "mysql",
+    "postgres": "postgres",
+}
+
+CONFIG_FILENAME = "db.config"
 
 
-def _load_config(path: str = CONFIG_PATH) -> dict:
+def _load_config(driver: str) -> dict:
+    config_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        CONFIG_FILENAME,
+    )
     cfg = configparser.ConfigParser()
-    cfg.read(path)
-    section = cfg["mysql"]
+    cfg.read(config_path)
+    section = cfg[driver]
     return {
         "host": section.get("host", "127.0.0.1"),
-        "port": section.getint("port", 3306),
-        "user": section.get("user", "root"),
+        "port": section.getint("port", 5432 if driver == "postgres" else 3306),
+        "user": section.get("user", "postgres" if driver == "postgres" else "root"),
         "password": section.get("password", ""),
         "database": section.get("database", "smallbank"),
     }
@@ -66,13 +74,24 @@ def _init_schema(conn, reset: bool = False):
     conn.commit()
 
 
-def _conn_factory(host, port, user, password, database):
-    def factory():
-        return pymysql.connect(
+def _connect(driver: str, host, port, user, password, database):
+    if driver == "postgres":
+        import psycopg2
+        return psycopg2.connect(
             host=host, port=port, user=user,
-            password=password, database=database,
-            autocommit=False,
+            password=password, dbname=database,
         )
+    import pymysql
+    return pymysql.connect(
+        host=host, port=port, user=user,
+        password=password, database=database,
+        autocommit=False,
+    )
+
+
+def _conn_factory(driver: str, host, port, user, password, database):
+    def factory():
+        return _connect(driver, host, port, user, password, database)
     return factory
 
 
@@ -106,16 +125,39 @@ def _format_table(results: dict, duration: float):
     return "\n".join(lines)
 
 
+def _resolve_db(args) -> dict:
+    cfg = _load_config(args.driver)
+    return {
+        "driver": args.driver,
+        "host": args.host if args.host is not None else cfg["host"],
+        "port": args.port if args.port is not None else cfg["port"],
+        "user": args.user if args.user is not None else cfg["user"],
+        "password": args.password if args.password is not None else cfg["password"],
+        "database": args.database if args.database is not None else cfg["database"],
+    }
+
+
+def _make_client(db, **kwargs):
+    driver_mod = importlib.import_module(f"drivers.{db['driver']}driver")
+    conn_factory = _conn_factory(
+        db["driver"], db["host"], db["port"], db["user"],
+        db["password"], db["database"],
+    )
+    return SmallBankClient(conn_factory=conn_factory, driver=driver_mod, **kwargs)
+
+
 def cmd_load(args):
-    conn = pymysql.connect(
-        host=args.host, port=args.port, user=args.user,
-        password=args.password, database=args.database,
+    db = _resolve_db(args)
+    conn = _connect(
+        db["driver"], db["host"], db["port"], db["user"],
+        db["password"], db["database"],
     )
     _init_schema(conn, reset=args.reset)
     conn.close()
 
     conn_factory = _conn_factory(
-        args.host, args.port, args.user, args.password, args.database
+        db["driver"], db["host"], db["port"], db["user"],
+        db["password"], db["database"],
     )
     loader = SmallBankLoader(
         conn_factory=conn_factory,
@@ -134,13 +176,9 @@ def cmd_load(args):
 
 
 def cmd_run(args):
-    conn_factory = _conn_factory(
-        args.host, args.port, args.user, args.password, args.database
-    )
-    client = SmallBankClient(
-        conn_factory=conn_factory,
-        num_accounts=args.accounts,
-        scale_factor=args.scale,
+    db = _resolve_db(args)
+    client = _make_client(
+        db, num_accounts=args.accounts, scale_factor=args.scale
     )
     _log(
         f"Executing benchmark for {args.transactions} transactions",
@@ -164,15 +202,17 @@ def cmd_run(args):
 
 
 def cmd_test(args):
-    conn = pymysql.connect(
-        host=args.host, port=args.port, user=args.user,
-        password=args.password, database=args.database,
+    db = _resolve_db(args)
+    conn = _connect(
+        db["driver"], db["host"], db["port"], db["user"],
+        db["password"], db["database"],
     )
     _init_schema(conn, reset=True)
     conn.close()
 
     conn_factory = _conn_factory(
-        args.host, args.port, args.user, args.password, args.database
+        db["driver"], db["host"], db["port"], db["user"],
+        db["password"], db["database"],
     )
 
     loader = SmallBankLoader(
@@ -190,11 +230,7 @@ def cmd_test(args):
     load_elapsed = time.time() - load_start
     _log(f"Data loading complete ({load_elapsed:.0f}s)", "loadFinish")
 
-    client = SmallBankClient(
-        conn_factory=conn_factory,
-        num_accounts=args.accounts,
-        scale_factor=1.0,
-    )
+    client = _make_client(db, num_accounts=args.accounts, scale_factor=1.0)
     _log(
         f"Executing benchmark for {args.transactions} transactions",
         "execute",
@@ -217,8 +253,6 @@ def cmd_test(args):
 
 
 def main():
-    config = _load_config()
-
     parser = argparse.ArgumentParser(
         prog="py-smallbank",
         description="SmallBank OLTP Benchmark",
@@ -226,11 +260,12 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_db_args(p):
-        p.add_argument("--host", default=config["host"])
-        p.add_argument("--port", type=int, default=config["port"])
-        p.add_argument("--user", default=config["user"])
-        p.add_argument("--password", default=config["password"])
-        p.add_argument("--database", default=config["database"])
+        p.add_argument("--driver", choices=list(DRIVERS), default="mysql")
+        p.add_argument("--host", default=None)
+        p.add_argument("--port", type=int, default=None)
+        p.add_argument("--user", default=None)
+        p.add_argument("--password", default=None)
+        p.add_argument("--database", default=None)
 
     p_load = sub.add_parser("load", help="Load initial data")
     add_db_args(p_load)
