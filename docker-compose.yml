@@ -1,0 +1,37 @@
+services:
+  mysql:
+    image: mysql:8.4
+    platform: linux/amd64
+    container_name: smallbank-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: mysql_root_password
+      MYSQL_DATABASE: smallbank
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pmysql_root_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  postgres:
+    image: postgres:17
+    container_name: smallbank-postgres
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: smallbank
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d smallbank"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  mysql-data:
+  postgres-data:
