@@ -2,7 +2,7 @@
 
 Python port of the [SmallBank benchmark](https://github.com/apavlo/h-store/tree/master/src/benchmarks/edu/brown/benchmark/smallbank) from H-Store.
 
-A simple OLTP benchmark simulating a bank with accounts, savings, and checking tables, with MySQL as the backend. Loading implementation adapted from [OLTPBench](https://github.com/oltpbenchmark/oltpbench).
+A simple OLTP benchmark simulating a bank with accounts, savings, and checking tables, with MySQL or PostgreSQL as the backend. Loading implementation adapted from [OLTPBench](https://github.com/oltpbenchmark/oltpbench).
 
 ## Setup
 
@@ -10,12 +10,22 @@ A simple OLTP benchmark simulating a bank with accounts, savings, and checking t
 uv sync
 ```
 
+### MySQL
+
 Create the target database in MySQL:
 ```sql
 CREATE DATABASE IF NOT EXISTS `smallbank`;
 ```
 
-Edit `mysql.config` to match your MySQL instance:
+### PostgreSQL
+
+Create the target database in PostgreSQL:
+```sql
+CREATE DATABASE smallbank;
+```
+
+DB credentials for both drivers live in a single `db.config` file (see
+`db.config-example`), one `[ini]` section per driver:
 ```ini
 [mysql]
 host = 127.0.0.1
@@ -23,26 +33,35 @@ port = 3306
 user = root
 password = your_password
 database = smallbank
+
+[postgres]
+host = 127.0.0.1
+port = 5432
+user = postgres
+password = your_password
+database = smallbank
 ```
 
 ## CLI Usage
 
 ```
-uv run python main.py load --reset        # Load 1M accounts (resets tables)
-uv run python main.py run                 # Run 10K transactions
-uv run python main.py test                # Quick load + benchmark (resets data)
-uv run python main.py <command> --help    # Per-command help
+uv run python main.py load --driver postgres --reset   # Load 1M accounts (resets tables)
+uv run python main.py run --driver postgres            # Run 10K transactions
+uv run python main.py test --driver postgres           # Quick load + benchmark (resets data)
+uv run python main.py <command> --help                 # Per-command help
 ```
 
-DB credentials are read from `mysql.config`. CLI flags override config values:
+By default the `--driver` is `mysql`. DB credentials are read from `db.config`,
+from the section matching the selected driver. CLI flags override config values:
 
-| Option | Source | Default |
-|--------|--------|---------|
-| `--host` | `mysql.config` | `127.0.0.1` |
-| `--port` | `mysql.config` | `3306` |
-| `--user` | `mysql.config` | `root` |
-| `--password` | `mysql.config` | — |
-| `--database` | `mysql.config` | `smallbank` |
+| Option | Source | Default (mysql) | Default (postgres) |
+|--------|--------|-----------------|--------------------|
+| `--driver` | CLI | `mysql` | — |
+| `--host` | `db.config` | `127.0.0.1` | `127.0.0.1` |
+| `--port` | `db.config` | `3306` | `5432` |
+| `--user` | `db.config` | `root` | `postgres` |
+| `--password` | `db.config` | — | — |
+| `--database` | `db.config` | `smallbank` | `smallbank` |
 
 ### `test`
 Quick load + benchmark. Resets data on each run.
@@ -75,7 +94,8 @@ Runs benchmark transactions against existing data.
 ## Running tests
 
 ```bash
-uv run python tests/test_mysql.py
+uv run python tests/test_mysql.py       # MySQL test suite
+uv run python tests/test_postgres.py    # PostgreSQL test suite
 ```
 
 ## Project structure
@@ -83,13 +103,15 @@ uv run python tests/test_mysql.py
 ```
 py_smallbank/
 ├── drivers/
-│   └── mysqldriver.py    # MySQL transaction procedures
+│   ├── mysqldriver.py     # MySQL transaction procedures
+│   └── postgresdriver.py  # PostgreSQL transaction procedures
 ├── tests/
-│   └── test_mysql.py     # Test suite (MySQL)
+│   ├── test_mysql.py      # Test suite (MySQL)
+│   └── test_postgres.py   # Test suite (PostgreSQL)
 ├── main.py               # CLI entry point
 ├── client.py             # Benchmark client driver
 ├── loader.py             # Data loader (OLTPBench-style batching)
 ├── constants.py          # Configuration constants
-├── mysql.config          # MySQL connection config
+├── db.config             # Combined connection config (MySQL + PostgreSQL)
 └── schema.sql            # Database schema
 ```
