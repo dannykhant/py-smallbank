@@ -45,11 +45,15 @@ database = smallbank
 ## CLI Usage
 
 ```
-uv run python main.py load --driver postgres --reset   # Load 1M accounts (resets tables)
-uv run python main.py run --driver postgres            # Run 10K transactions
-uv run python main.py test --driver postgres           # Quick load + benchmark (resets data)
+uv run python main.py load --driver postgres --reset   # Load accounts (resets tables); --accounts sets how many
+uv run python main.py run  --driver postgres           # Run 10K transactions against LOADED data (note: --accounts must match the load)
+uv run python main.py test --driver postgres           # Quick load + benchmark in one step (resets data)
 uv run python main.py <command> --help                 # Per-command help
 ```
+
+Note: `run` does not load data. Load first with `load` (or use `test`, which
+loads and benchmarks together), and make sure `run`'s `--accounts` matches the
+number of accounts you loaded.
 
 By default the `--driver` is `mysql`. DB credentials are read from `db.config`,
 from the section matching the selected driver. CLI flags override config values:
@@ -83,7 +87,20 @@ Bulk-loads account data using `executemany` batching (100K rows per thread).
 | `--reset` | — | Drop and recreate tables before loading |
 
 ### `run`
-Runs benchmark transactions against existing data.
+Runs benchmark transactions against **existing** data. You must load the
+database first (see `load`) — `run` does not create any accounts.
+
+**Important:** `--accounts` must match the number of accounts you loaded.
+`run` generates random account IDs in `[hotspot_size, num_accounts)` and
+expects every one of them to already exist in the DB; if the loaded data
+covers a smaller range, almost every transaction will fail with `InvalidAccount`
+and be counted as `ERROR`.
+
+Typical workflow:
+```bash
+uv run python main.py load --driver postgres --accounts 1000
+uv run python main.py run  --driver postgres --accounts 1000 --transactions 10000
+```
 
 | Option | Default |
 |--------|---------|
