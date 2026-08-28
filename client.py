@@ -141,6 +141,10 @@ class SmallBankClient:
                 name = txn.name
             except Exception:
                 name = "ERROR"
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
             elapsed = _time.perf_counter() - start
             counts[name] = counts.get(name, 0) + 1
             latencies[name] = latencies.get(name, 0.0) + elapsed

@@ -10,6 +10,11 @@ import time
 
 from loader import SmallBankLoader
 from client import SmallBankClient
+from constants import (
+    HOTSPOT_PERCENTAGE,
+    HOTSPOT_USE_FIXED_SIZE,
+    HOTSPOT_FIXED_SIZE,
+)
 
 DRIVERS = {
     "mysql": "mysql",
@@ -104,10 +109,14 @@ def _format_table(results: dict, duration: float):
 
     total_count = 0
     total_usec = 0.0
+    error_entries = []
 
     for name in sorted(results):
         c = results[name]["count"]
         t = results[name]["latency"]
+        if name == "ERROR":
+            error_entries.append((name, c, t))
+            continue
         total_count += c
         total_usec += t
         usec = t * 1_000_000
@@ -122,6 +131,12 @@ def _format_table(results: dict, duration: float):
     lines.append(
         f"  {'TOTAL':16s} {total_count:>12d} {total_usec_total:>20.0f} {total_rate:>20.0f} txn/s"
     )
+
+    for name, c, t in error_entries:
+        usec = t * 1_000_000
+        lines.append(
+            f"  {name:16s} {c:>12d} {usec:>20.0f} {'-':>20s} (excluded)"
+        )
     return "\n".join(lines)
 
 
@@ -175,8 +190,36 @@ def cmd_load(args):
     _log(f"Data loading complete ({elapsed:.0f}s)", "loadFinish")
 
 
+def _warn_undersized(args):
+    num_accounts = int(round(args.accounts * args.scale))
+    if HOTSPOT_USE_FIXED_SIZE:
+        hotspot_size = HOTSPOT_FIXED_SIZE
+    else:
+        hotspot_size = int((HOTSPOT_PERCENTAGE / 100.0) * num_accounts)
+    hot_accounts = num_accounts - hotspot_size
+    if hot_accounts <= 0:
+        _log(
+            "Loaded account count is <= the hotspot size; all "
+            "transactions target the same few accounts.",
+            "warn",
+        )
+        return
+    reuse = args.transactions / hot_accounts
+    if args.transactions > hot_accounts:
+        _log(
+            f"num_accounts ({num_accounts}) is much smaller than the "
+            f"transaction count ({args.transactions}). Hot accounts "
+            f"~{hot_accounts} will be reused ~{reuse:.1f}x per run, which "
+            f"drains checking balances and inflates InsufficientFunds "
+            f"aborts (especially SEND_PAYMENT). Use many more accounts "
+            f"than transactions for a realistic benchmark.",
+            "warn",
+        )
+
+
 def cmd_run(args):
     db = _resolve_db(args)
+    _warn_undersized(args)
     client = _make_client(
         db, num_accounts=args.accounts, scale_factor=args.scale
     )
@@ -221,6 +264,7 @@ def cmd_test(args):
         scale_factor=1.0,
         load_threads=args.threads,
     )
+    _warn_undersized(args)
     _log(
         f"Loading {args.accounts} accounts ({args.threads} threads)...",
         "loadStart",
