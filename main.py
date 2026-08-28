@@ -133,9 +133,8 @@ def _format_table(results: dict, duration: float):
     )
 
     for name, c, t in error_entries:
-        usec = t * 1_000_000
         lines.append(
-            f"  {name:16s} {c:>12d} {usec:>20.0f} {'-':>20s} (excluded)"
+            f"  {name:16s} {c:>12d} {'-':>20s} {'-':>20s}"
         )
     return "\n".join(lines)
 
