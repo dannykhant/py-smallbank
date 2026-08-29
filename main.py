@@ -190,7 +190,8 @@ def cmd_load(args):
 
 
 def _warn_undersized(args):
-    num_accounts = int(round(args.accounts * args.scale))
+    scale = getattr(args, "scale", 1.0)
+    num_accounts = int(round(args.accounts * scale))
     if HOTSPOT_USE_FIXED_SIZE:
         hotspot_size = HOTSPOT_FIXED_SIZE
     else:
