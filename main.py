@@ -103,12 +103,12 @@ def _conn_factory(driver: str, host, port, user, password, database):
 def _format_table(results: dict, duration: float):
     lines = []
     lines.append("")
-    lines.append(f"Execution Results after {duration:.0f} seconds")
+    lines.append(f"Execution Results after {duration:.2f} seconds")
     lines.append("--------------------------------------------------------------------------------")
-    lines.append(f"  {'':16s} {'Executed':>12s} {'Time (µs)':>20s} {'Rate':>20s}")
+    lines.append(f"  {'':16s} {'Executed':>12s} {'Time (ms)':>20s} {'Rate':>20s}")
 
     total_count = 0
-    total_usec = 0.0
+    total_time = 0.0
     error_entries = []
 
     for name in sorted(results):
@@ -117,19 +117,21 @@ def _format_table(results: dict, duration: float):
         if name == "ERROR":
             error_entries.append((name, c, t))
             continue
+        if name == "TOTAL":
+            continue
         total_count += c
-        total_usec += t
-        usec = t * 1_000_000
+        total_time += t
+        ms = t * 1_000
         rate = c / t if t > 0 else 0.0
         lines.append(
-            f"  {name:16s} {c:>12d} {usec:>20.0f} {rate:>20.0f} txn/s"
+            f"  {name:16s} {c:>12d} {ms:>20.5f} {rate:>20.5f} txn/s"
         )
 
     lines.append("--------------------------------------------------------------------------------")
-    total_usec_total = total_usec * 1_000_000
-    total_rate = total_count / total_usec if total_usec > 0 else 0.0
+    total_ms = total_time * 1_000
+    total_rate = total_count / total_time if total_time > 0 else 0.0
     lines.append(
-        f"  {'TOTAL':16s} {total_count:>12d} {total_usec_total:>20.0f} {total_rate:>20.0f} txn/s"
+        f"  {'TOTAL':16s} {total_count:>12d} {total_ms:>20.5f} {total_rate:>20.5f} txn/s"
     )
 
     for name, c, t in error_entries:
@@ -137,6 +139,39 @@ def _format_table(results: dict, duration: float):
             f"  {name:16s} {c:>12d} {'-':>20s} {'-':>20s}"
         )
     return "\n".join(lines)
+
+
+def _format_dat(results: dict, duration: float = 0.0) -> str:
+    lines = ["transaction,executed,execution_time,transaction_rate"]
+    total_count = 0
+    total_time = 0.0
+
+    for name in sorted(results):
+        if name in ("ERROR", "TOTAL"):
+            continue
+        c = results[name]["count"]
+        t = results[name]["latency"]
+        total_count += c
+        total_time += t
+        ms = t * 1_000
+        rate = c / t if t > 0 else 0.0
+        lines.append(f"{name},{c},{ms:.5f},{rate:.5f}")
+
+    total_ms = total_time * 1_000
+    total_rate = total_count / total_time if total_time > 0 else 0.0
+    lines.append(f"TOTAL,{total_count},{total_ms:.5f},{total_rate:.5f}")
+
+    return "\n".join(lines) + "\n"
+
+
+def _write_output(path: str, results: dict, duration: float = 0.0):
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    content = _format_dat(results, duration)
+    with open(path, "w") as f:
+        f.write(content)
+    _log(f"Results written to {path}", "output")
 
 
 def _resolve_db(args) -> dict:
@@ -242,6 +277,8 @@ def cmd_run(args):
         }
 
     print(_format_table(combined, elapsed))
+    if getattr(args, "output_path", None):
+        _write_output(args.output_path, combined, elapsed)
 
 
 def cmd_test(args):
@@ -294,6 +331,8 @@ def cmd_test(args):
         }
 
     print(_format_table(combined, elapsed))
+    if getattr(args, "output_path", None):
+        _write_output(args.output_path, combined, elapsed)
 
 
 def main():
@@ -324,6 +363,7 @@ def main():
     p_run.add_argument("--accounts", type=int, default=1000000)
     p_run.add_argument("--scale", type=float, default=1.0)
     p_run.add_argument("--transactions", type=int, default=10000)
+    p_run.add_argument("--output-path", default=None, help="Path to save benchmark results in .dat format")
     p_run.set_defaults(func=cmd_run)
 
     p_test = sub.add_parser("test", help="Quick load + benchmark (resets data)")
@@ -331,6 +371,7 @@ def main():
     p_test.add_argument("--accounts", type=int, default=500)
     p_test.add_argument("--transactions", type=int, default=200)
     p_test.add_argument("--threads", type=int, default=2)
+    p_test.add_argument("--output-path", default=None, help="Path to save benchmark results in .dat format")
     p_test.set_defaults(func=cmd_test)
 
     args = parser.parse_args()

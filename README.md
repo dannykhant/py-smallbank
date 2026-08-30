@@ -75,6 +75,7 @@ Quick load + benchmark. Resets data on each run.
 | `--accounts` | `500` |
 | `--transactions` | `200` |
 | `--threads` | `2` |
+| `--output-path` | — | Path to save benchmark results in `.dat` format |
 
 ### `load`
 Bulk-loads account data using `executemany` batching (100K rows per thread).
@@ -99,7 +100,7 @@ and be counted as `ERROR`.
 Typical workflow:
 ```bash
 uv run python main.py load --driver postgres --accounts 1000
-uv run python main.py run  --driver postgres --accounts 1000 --transactions 10000
+uv run python main.py run  --driver postgres --accounts 1000 --transactions 10000 --output-path results.dat
 ```
 
 | Option | Default |
@@ -107,6 +108,7 @@ uv run python main.py run  --driver postgres --accounts 1000 --transactions 1000
 | `--accounts` | `1000000` |
 | `--scale` | `1.0` |
 | `--transactions` | `10000` |
+| `--output-path` | — | Path to save benchmark results in `.dat` format |
 
 ## Running tests
 
