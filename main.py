@@ -79,6 +79,33 @@ def _init_schema(conn, reset: bool = False):
     conn.commit()
 
 
+def _ensure_database(driver: str, host, port, user, password, database):
+    if driver == "postgres":
+        import psycopg2
+        admin = psycopg2.connect(
+            host=host, port=port, user=user,
+            password=password, dbname="postgres",
+        )
+        admin.autocommit = True
+        cur = admin.cursor()
+        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (database,))
+        if not cur.fetchone():
+            cur.execute('CREATE DATABASE "%s"' % database.replace('"', '""'))
+        cur.close()
+        admin.close()
+    else:
+        import pymysql
+        admin = pymysql.connect(
+            host=host, port=port, user=user,
+            password=password,
+        )
+        admin.autocommit = True
+        cur = admin.cursor()
+        cur.execute("CREATE DATABASE IF NOT EXISTS `%s`" % database)
+        cur.close()
+        admin.close()
+
+
 def _connect(driver: str, host, port, user, password, database):
     if driver == "postgres":
         import psycopg2
@@ -197,6 +224,10 @@ def _make_client(db, **kwargs):
 
 def cmd_load(args):
     db = _resolve_db(args)
+    _ensure_database(
+        db["driver"], db["host"], db["port"], db["user"],
+        db["password"], db["database"],
+    )
     conn = _connect(
         db["driver"], db["host"], db["port"], db["user"],
         db["password"], db["database"],
@@ -283,6 +314,10 @@ def cmd_run(args):
 
 def cmd_test(args):
     db = _resolve_db(args)
+    _ensure_database(
+        db["driver"], db["host"], db["port"], db["user"],
+        db["password"], db["database"],
+    )
     conn = _connect(
         db["driver"], db["host"], db["port"], db["user"],
         db["password"], db["database"],
